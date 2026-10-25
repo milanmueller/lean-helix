@@ -1,0 +1,7 @@
+[language-server.lean-prism]
+command = "lean-prism"
+args = ["serve"]
+
+[[language]]
+name = "lean"
+language-servers = ["lean-prism"]
