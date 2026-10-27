@@ -2,6 +2,16 @@
 command = "lean-prism"
 args = ["serve"]
 
+# Unicode input (\to -> →); table lives in ./unicode-input via UNICODE_INPUT_PATH (set in the flake).
+[language-server.scls]
+command = "simple-completion-language-server"
+
+[language-server.scls.config]
+feature_words = false
+feature_snippets = false
+feature_unicode_input = true
+case_sensitive = true # \N (ℕ) vs \n
+
 [[language]]
 name = "lean"
-language-servers = ["lean-prism"]
+language-servers = ["lean-prism", "scls"]

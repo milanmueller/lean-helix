@@ -11,4 +11,14 @@ Nix dev shell for trying [lean-tui](https://codeberg.org/wvhulle/lean-tui) with 
 
 `Demo/Basic.lean` ends with an unfinished proof (`or_swap`) to inspect.
 
+## Unicode input
+
+Lean's language server doesn't expand abbreviations like `\to` → `→` (VS Code does it client-side). Here Helix runs
+[simple-completion-language-server](https://github.com/estin/simple-completion-language-server) (scls) next to lean-prism,
+fed `unicode-input/lean.toml` (1839 entries generated from vscode-lean4's `abbreviations.json`; the 26 bracket-pair
+entries using `$CURSOR` are left out). The dev shell provides scls and sets `UNICODE_INPUT_PATH`.
+
+Type `\to`, `\alpha`, `\N`… and accept the completion (Tab/Enter); `Ctrl-x` opens the menu manually. Optionally set
+`completion-trigger-len = 1` under `[editor]` in your Helix `config.toml` so short ones like `\a` pop up.
+
 Notes: x86_64-linux only (lean-prism limitation). `lean-toolchain` must match a Lean version supported by lean-prism. The flake uses the `wvhulle.cachix.org` cache if your Nix trusts it.

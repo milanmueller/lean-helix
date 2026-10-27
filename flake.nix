@@ -23,10 +23,12 @@
         packages = [
           pkgs.elan # provides lean/lake matching ./lean-toolchain
           pkgs.helix # editor with project-local config in .helix/
+          pkgs.simple-completion-language-server # unicode input (\to -> →) in Helix
           lean-tui.packages.${system}.default
           lean-prism.packages.${system}.default
         ];
         shellHook = ''
+          export UNICODE_INPUT_PATH="$PWD/unicode-input"
           echo "lean-tui playground: run 'hx Demo/Basic.lean' in one terminal and 'lean-tui' in another."
         '';
       };
