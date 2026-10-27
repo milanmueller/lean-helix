@@ -8,7 +8,7 @@
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
-    lean-tui.url = "git+https://codeberg.org/wvhulle/lean-tui";
+    lean-tui.url = "git+https://codeberg.org/milanmueller/lean-tui?ref=ansi-colors&rev=27e200b3418cffc7aa206c885ea750db56f53bdb";
     lean-prism.url = "git+https://codeberg.org/wvhulle/lean-prism";
   };
 

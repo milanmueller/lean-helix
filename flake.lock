@@ -310,17 +310,19 @@
         "rust-overlay": "rust-overlay"
       },
       "locked": {
-        "lastModified": 1792788831,
-        "narHash": "sha256-57uRzfK1BZ3Pr+5EAvT2e7Z9fG4GDCyezt9GCkj2FYs=",
-        "ref": "refs/heads/main",
-        "rev": "5042ea48babcd924a96ae9d30f867fb2e71066c2",
-        "revCount": 208,
+        "lastModified": 1793097122,
+        "narHash": "sha256-NxQcJecrWsVbsYkhsdnFSDXfPAFwwjTLS9niqj72tDE=",
+        "ref": "ansi-colors",
+        "rev": "27e200b3418cffc7aa206c885ea750db56f53bdb",
+        "revCount": 209,
         "type": "git",
-        "url": "https://codeberg.org/wvhulle/lean-tui"
+        "url": "https://codeberg.org/milanmueller/lean-tui"
       },
       "original": {
+        "ref": "ansi-colors",
+        "rev": "27e200b3418cffc7aa206c885ea750db56f53bdb",
         "type": "git",
-        "url": "https://codeberg.org/wvhulle/lean-tui"
+        "url": "https://codeberg.org/milanmueller/lean-tui"
       }
     },
     "lean4-nix": {
