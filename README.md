@@ -16,7 +16,7 @@ The dev shell's `hx` is built from the [Steel plugin fork](https://github.com/he
 config lives in `.helix/`. `.helix/lean-goals.scm` adds a pane on the right showing the goals and hypotheses at the cursor.
 It asks `lake serve` with Lean's built-in `$/lean/plainGoal` (falling back to `$/lean/plainTermGoal`) 75 ms after the last
 cursor movement or edit, so holding `j` sends one request at the end, not one per line. `:lean-goals-toggle` hides or
-shows it.
+shows it, and `:lean-goals-resize` sets its width (`60`) or grows and shrinks it (`+10`, `-10`); it starts at 50 columns.
 
 Helix's block cursor sits *on* a character, so at the last character of a tactic line the pane shows the goal before that
 tactic; move to the next line to see its result.

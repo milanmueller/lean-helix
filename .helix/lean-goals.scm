@@ -9,6 +9,7 @@
 (require (prefix-in helix.static. "helix/static.scm"))
 
 (provide lean-goals-enable!
+         lean-goals-resize
          lean-goals-toggle)
 
 ;; Width of the pane in columns, including the separator.
@@ -36,13 +37,14 @@
 
 (define (render _state rect buf)
   (when *enabled*
-    (let* ([x (- (area-width rect) *width*)]
+    (let* ([width (min *width* (area-width rect))]
+           [x (- (area-width rect) width)]
            ;; Leave the command line at the bottom alone.
            [height (- (area-height rect) 1)]
            [text-style (theme-scope "ui.text")]
            [sep-style (theme-scope "ui.window")]
-           [rows (apply append (map (lambda (l) (wrap l (- *width* 2))) *lines*))])
-      (buffer/clear-with buf (area x 0 *width* height) (theme-scope "ui.background"))
+           [rows (apply append (map (lambda (l) (wrap l (max 1 (- width 2)))) *lines*))])
+      (buffer/clear-with buf (area x 0 width height) (theme-scope "ui.background"))
       (let loop ([y 0])
         (when (< y height)
           (frame-set-string! buf x y "│" sep-style)
@@ -141,6 +143,21 @@
     (show-pane!)
     ;; init.scm runs before any file is opened, when there is no view to look at yet.
     (enqueue-thread-local-callback schedule-update)))
+
+(define *min-width* 10)
+
+;;@doc
+;; Set the width of the Lean goal pane: `60` sets it, `+10` / `-10` grow or shrink it.
+(define (lean-goals-resize amount)
+  (let* ([n (string->number amount)]
+         [relative? (memv (string-ref amount 0) '(#\+ #\-))])
+    (if (not n)
+        (set-error! (string-append "lean-goals-resize: expected a number like 60, +10 or -10, got " amount))
+        (begin
+          (set! *width* (max *min-width* (if relative? (+ *width* n) n)))
+          (when *enabled*
+            (set-editor-clip-right! *width*))
+          (set-status! (string-append "Goal pane width: " (number->string *width*)))))))
 
 ;;@doc
 ;; Show or hide the Lean goal pane.
