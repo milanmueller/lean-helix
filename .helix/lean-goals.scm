@@ -1,7 +1,7 @@
 ;; Lean goal pane: shows the goals and hypotheses at the cursor in a pane on the right.
 ;;
 ;; Uses Lean's own `$/lean/plainGoal` (tactic mode) and `$/lean/plainTermGoal` (term mode)
-;; requests, so it works with plain `lake serve` as well as `lean-prism serve`.
+;; requests, so it only needs the plain `lake serve` language server.
 
 (require "helix/editor.scm")
 (require "helix/misc.scm")
@@ -16,8 +16,8 @@
 ;; Wait this long after the last cursor movement or edit before asking Lean, so that
 ;; holding `j` doesn't send a request per line.
 (define *debounce-ms* 75)
-;; Language servers that answer Lean's goal requests, in order of preference.
-(define *servers* '("lean-prism" "lean"))
+;; Name of the Lean language server in languages.toml.
+(define *server* "lean")
 
 (define *enabled* #f)
 ;; Lines currently shown in the pane.
@@ -68,13 +68,9 @@
 (define (lean-buffer?)
   (equal? (editor-document->language (editor->doc-id (editor-focus))) "lean"))
 
+;; The server name if it's attached to the current buffer (it may still be starting).
 (define (active-server)
-  (let ([names (map lsp-client-name (get-active-lsp-clients))])
-    (let loop ([candidates *servers*])
-      (cond
-        [(null? candidates) #f]
-        [(member (car candidates) names) (car candidates)]
-        [else (loop (cdr candidates))]))))
+  (and (member *server* (map lsp-client-name (get-active-lsp-clients))) *server*))
 
 (define (show! tick lines)
   (when (>= tick *shown-tick*)

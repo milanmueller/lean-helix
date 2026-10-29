@@ -1,16 +1,2 @@
 [editor.lsp]
 display-progress-messages = true
-
-# lean-prism only updates lean-tui on LSP requests, and Helix sends none on plain cursor
-# movement or when leaving insert mode. Chain a hover request after those so the graph
-# follows the cursor and edits.
-[keys.normal]
-j = ["move_visual_line_down", "hover"]
-k = ["move_visual_line_up", "hover"]
-down = ["move_visual_line_down", "hover"]
-up = ["move_visual_line_up", "hover"]
-u = ["undo", "hover"]
-U = ["redo", "hover"]
-
-[keys.insert]
-esc = ["normal_mode", "hover"]
