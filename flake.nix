@@ -44,6 +44,9 @@
         ];
         shellHook = ''
           export UNICODE_INPUT_PATH="$PWD/unicode-input"
+          # Keep Steel (Helix plugin) config and data in the repo instead of $HOME.
+          export HELIX_STEEL_CONFIG="$PWD/.helix"
+          export STEEL_HOME="$PWD/.steel"
           echo "lean-tui playground: run 'hx Demo/Basic.lean' in one terminal and 'lean-tui' in another."
         '';
       };
