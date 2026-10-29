@@ -27,7 +27,8 @@
         # The perl grammar fails to compile with the current gcc; unrelated to Lean.
         includeGrammarIf = g: g.name != "perl";
       }).overrideAttrs (old: {
-        buildFeatures = (old.buildFeatures or [ ]) ++ [ "steel" ];
+        # buildFeatures is consumed by buildRustPackage before overrideAttrs, so pass the flag directly.
+        cargoBuildFlags = (old.cargoBuildFlags or [ ]) ++ [ "--features" "steel" ];
       });
     in
     {
