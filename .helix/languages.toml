@@ -1,5 +1,6 @@
-[language-server.lean-prism]
-command = "lean-prism"
+# Plain Lean language server; the goal pane (lean-goals.scm) uses its $/lean/plainGoal request.
+[language-server.lean]
+command = "lake"
 args = ["serve"]
 
 # Unicode input (\to -> →); table lives in ./unicode-input via UNICODE_INPUT_PATH (set in the flake).
@@ -14,4 +15,4 @@ case_sensitive = true # \N (ℕ) vs \n
 
 [[language]]
 name = "lean"
-language-servers = ["lean-prism", "scls"]
+language-servers = ["lean", "scls"]
