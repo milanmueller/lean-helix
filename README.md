@@ -17,6 +17,15 @@ Nix dev shell for trying [lean-tui](https://codeberg.org/wvhulle/lean-tui) with 
 lean-tui on requests, so `.helix/config.toml` chains a `hover` after `j`/`k`/arrows, undo/redo and leaving insert mode. Other
 motions (`w`, `gg`, search, mouse…) don't update the graph; trigger one manually, e.g. `space k`.
 
+#### Goal pane (Steel plugin)
+
+The dev shell's `hx` is built from the [Steel plugin fork](https://github.com/helix-editor/helix/pull/8675) of Helix.
+`.helix/lean-goals.scm` adds a pane on the right showing the goals and hypotheses at the cursor, without lean-tui. It asks
+the language server with Lean's built-in `$/lean/plainGoal` (falling back to `$/lean/plainTermGoal`) 75 ms after the last
+cursor movement or edit, so holding `j` sends one request at the end, not one per line. `:lean-goals-toggle` hides or shows it.
+
+The shell sets `HELIX_STEEL_CONFIG` so Helix loads `init.scm`/`helix.scm` from `.helix/`, and `STEEL_HOME` to `.steel/`.
+
 ### Zed
 
 `zed .` from inside the dev shell (config in `.zed/settings.json`). Zed is not provided by the flake, so install it separately,
