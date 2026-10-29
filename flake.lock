@@ -141,6 +141,28 @@
         "type": "github"
       }
     },
+    "helix-steel": {
+      "inputs": {
+        "nixpkgs": [
+          "nixpkgs"
+        ],
+        "rust-overlay": "rust-overlay"
+      },
+      "locked": {
+        "lastModified": 1792684031,
+        "narHash": "sha256-wBjRHntxoxT+fo85i0rct/NWN/OG/Z6nVky/Efb2gjE=",
+        "owner": "mattwparas",
+        "repo": "helix",
+        "rev": "424add100eac9ca258d969b985a8ac370469ec05",
+        "type": "github"
+      },
+      "original": {
+        "owner": "mattwparas",
+        "ref": "steel-event-system",
+        "repo": "helix",
+        "type": "github"
+      }
+    },
     "lean-prism": {
       "inputs": {
         "lean-prism-lean-v4-31-0": "lean-prism-lean-v4-31-0",
@@ -307,7 +329,7 @@
         "lean-prism": "lean-prism_2",
         "lean4-nix": "lean4-nix_7",
         "nixpkgs": "nixpkgs_7",
-        "rust-overlay": "rust-overlay"
+        "rust-overlay": "rust-overlay_2"
       },
       "locked": {
         "lastModified": 1793097122,
@@ -696,12 +718,34 @@
     },
     "root": {
       "inputs": {
+        "helix-steel": "helix-steel",
         "lean-prism": "lean-prism",
         "lean-tui": "lean-tui",
         "nixpkgs": "nixpkgs_8"
       }
     },
     "rust-overlay": {
+      "inputs": {
+        "nixpkgs": [
+          "helix-steel",
+          "nixpkgs"
+        ]
+      },
+      "locked": {
+        "lastModified": 1775358767,
+        "narHash": "sha256-f2eC+WIfhjevCPQILuV08i/kmKZzYZpUvkom/33VxCA=",
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "rev": "20fd44bc663daa53a2575e01293e24e681d62244",
+        "type": "github"
+      },
+      "original": {
+        "owner": "oxalica",
+        "repo": "rust-overlay",
+        "type": "github"
+      }
+    },
+    "rust-overlay_2": {
       "inputs": {
         "nixpkgs": [
           "lean-tui",
