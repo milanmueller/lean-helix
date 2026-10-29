@@ -44,4 +44,4 @@ entries using `$CURSOR` are left out). The dev shell provides scls and sets `UNI
 Type `\to`, `\alpha`, `\N`… and accept the completion (Tab/Enter); `Ctrl-x` opens the menu manually. Optionally set
 `completion-trigger-len = 1` under `[editor]` in your Helix `config.toml` so short ones like `\a` pop up (in Zed, `.zed/settings.json` sets `show_completions_on_input`).
 
-Notes: the flake only defines `x86_64-linux`.
+Notes: the flake defines `x86_64-linux`, `aarch64-linux` and `aarch64-darwin`; only `x86_64-linux` has been built and tried.
