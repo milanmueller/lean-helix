@@ -18,6 +18,8 @@ Lean knows at the cursor:
 
 - **Tactic state**: the goals and hypotheses (`$/lean/plainGoal`).
 - **Expected type** of the term at the cursor (`$/lean/plainTermGoal`).
+- **Messages**: errors, warnings and `#eval`/`#check` output for the cursor line. Helix doesn't pass diagnostics on to
+  plugins, so these come from Lean's RPC (`Lean.Widget.getInteractiveDiagnostics`), as in the infoview.
 
 It asks `lake serve` 75 ms after the last cursor movement or edit, so holding `j` sends one round of requests at the end,
 not one per line. Empty sections are left out. `:lean-goals-toggle` hides or shows the pane.

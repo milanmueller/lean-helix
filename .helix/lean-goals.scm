@@ -1,9 +1,12 @@
-;; Lean goal pane: shows the tactic state and expected type at the cursor, like VS Code's
-;; infoview, in a split on the right.
+;; Lean goal pane: shows what VS Code's infoview shows for the cursor position (tactic state,
+;; expected type and messages) in a split on the right.
 ;;
 ;; Only needs the plain `lake serve` language server:
 ;; - `$/lean/plainGoal`: the tactic state,
-;; - `$/lean/plainTermGoal`: the expected type of the term.
+;; - `$/lean/plainTermGoal`: the expected type of the term,
+;; - Lean's RPC (`Lean.Widget.getInteractiveDiagnostics`): errors, warnings and `#eval` output.
+;;   Helix doesn't pass `publishDiagnostics` on to plugins, so this is the only way to get the
+;;   messages' text; it's also what the infoview itself uses.
 ;;
 ;; The pane is an ordinary Helix split showing a file that this plugin rewrites and reloads,
 ;; so window navigation (`Space w l`, `Ctrl-w h`…), selections and yanking work in it as in any
@@ -40,7 +43,7 @@
 (define *tick* 0)
 ;; Answers for the current tick so far: section name -> lines, or #f if there's nothing to show.
 (define *answers* (hash))
-(define *sections* '(tactic term))
+(define *sections* '(tactic term messages))
 
 ;;; The pane
 
@@ -116,7 +119,8 @@
                           (append (list heading) body '(""))
                           '())))]
          [out (append (section 'tactic "-- Tactic state")
-                      (section 'term "-- Expected type"))])
+                      (section 'term "-- Expected type")
+                      (section 'messages "-- Messages"))])
     (show! (if (null? out) '("-- Nothing at the cursor") out))))
 
 ;; `$/lean/plainGoal`: {goals: [string]}. JSON arrives as hashes keyed by symbols, arrays as lists.
@@ -137,6 +141,85 @@
   (and (hash? result)
        (string? (hash-try-get result 'goal))
        (lines (hash-ref result 'goal))))
+
+;;; Messages
+;;
+;; Messages are `TaggedText`: {text: s} | {append: [tt]} | {tag: [embed, tt]}. In messages the
+;; embeds are expressions, goals, traces or widgets; in expressions they're subexpression info
+;; around the text.
+
+(define (field x key)
+  (and (hash? x) (hash-try-get x key)))
+
+(define (tagged->string tt)
+  (cond
+    [(field tt 'text) (field tt 'text)]
+    [(field tt 'append) (apply string-append (map tagged->string (field tt 'append)))]
+    [(field tt 'tag)
+     (let ([embed (car (field tt 'tag))] [inner (cadr (field tt 'tag))])
+       (cond
+         [(field embed 'expr) (tagged->string (field embed 'expr))]
+         [(field embed 'goal) (goal->string (field embed 'goal))]
+         [(field embed 'trace) (trace->string (field embed 'trace))]
+         [(field embed 'widget) (tagged->string (field (field embed 'widget) 'alt))]
+         [else (tagged->string inner)]))]
+    [else ""]))
+
+(define (goal->string goal)
+  (let* ([case-line (let ([name (field goal 'userName)])
+                      (if (string? name) (list (string-append "case " name)) '()))]
+         [hyp (lambda (h)
+                (string-append (string-join (field h 'names) " ")
+                               " : "
+                               (tagged->string (field h 'type))
+                               (let ([val (field h 'val)])
+                                 (if val (string-append " := " (tagged->string val)) ""))))]
+         [prefix (or (field goal 'goalPrefix) "⊢ ")])
+    (string-join (append case-line
+                         (map hyp (or (field goal 'hyps) '()))
+                         (list (string-append prefix (tagged->string (field goal 'type)))))
+                 "\n")))
+
+(define (trace->string trace)
+  (let* ([indent (make-string (* 2 (int (field trace 'indent))) #\space)]
+         [cls (field trace 'cls)]
+         [head (string-append indent
+                              (if (string? cls) (string-append "[" cls "] ") "")
+                              (tagged->string (field trace 'msg)))]
+         [children (field (field trace 'children) 'strict)])
+    (if (list? children)
+        (string-join (cons head (map tagged->string children)) "\n")
+        head)))
+
+;; JSON numbers arrive as floats.
+(define (int x)
+  (if (number? x) (exact (round x)) 0))
+
+(define (severity->string n)
+  (case (int n)
+    [(1) "error"]
+    [(2) "warning"]
+    [(3) "info"]
+    [(4) "hint"]
+    [else "message"]))
+
+(define (diagnostic-lines diag)
+  (let ([start (field (field diag 'range) 'start)])
+    (cons (string-append "-- "
+                         (severity->string (field diag 'severity))
+                         " at "
+                         (number->string (+ 1 (int (field start 'line))))
+                         ":"
+                         (number->string (+ 1 (int (field start 'character)))))
+          (lines (tagged->string (field diag 'message))))))
+
+(define (messages-lines diags)
+  (and (list? diags)
+       (not (null? diags))
+       (let loop ([diags diags] [acc '()])
+         (if (null? (cdr diags))
+             (append acc (diagnostic-lines (car diags)))
+             (loop (cdr diags) (append acc (diagnostic-lines (car diags)) '("")))))))
 
 ;;; Requests
 
@@ -169,6 +252,23 @@
   (when (and (= tick *tick*) (active-server))
     (send-lsp-command *server* method params on-result)))
 
+;; RPC sessions expire unless kept alive, so open a fresh one per update; the server drops the
+;; old ones on its own.
+(define (request-messages tick uri pos)
+  (request tick
+           "$/lean/rpc/connect"
+           (hash "uri" uri)
+           (lambda (session)
+             (request tick
+                      "$/lean/rpc/call"
+                      (hash "sessionId" (field session 'sessionId)
+                            "method" "Lean.Widget.getInteractiveDiagnostics"
+                            "params" (hash "lineRange" (hash "start" (hash-ref pos "line")
+                                                             "end" (+ 1 (hash-ref pos "line"))))
+                            "textDocument" (hash "uri" uri)
+                            "position" pos)
+                      (lambda (diags) (answer! tick 'messages messages-lines diags))))))
+
 (define (request-all tick)
   (let ([path (helix.static.cx->current-file)])
     (when (and (active-server) path)
@@ -182,6 +282,7 @@
                  (lambda (r) (answer! tick 'tactic tactic-lines r)))
         (request tick "$/lean/plainTermGoal" params
                  (lambda (r) (answer! tick 'term term-lines r)))
+        (request-messages tick uri pos)
         (enqueue-thread-local-callback-with-delay
          *timeout-ms*
          (lambda ()
