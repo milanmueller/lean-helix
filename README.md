@@ -13,10 +13,14 @@ Nix dev shell for working on a small Lean 4 project in Helix, with a pane that s
 ## Goal pane
 
 The dev shell's `hx` is built from the [Steel plugin fork](https://github.com/helix-editor/helix/pull/8675) of Helix; the
-config lives in `.helix/`. `.helix/lean-goals.scm` opens a vertical split on the right showing the goals and hypotheses at
-the cursor. It asks `lake serve` with Lean's built-in `$/lean/plainGoal` (falling back to `$/lean/plainTermGoal`) 75 ms
-after the last cursor movement or edit, so holding `j` sends one request at the end, not one per line.
-`:lean-goals-toggle` hides or shows it.
+config lives in `.helix/`. `.helix/lean-goals.scm` opens a vertical split on the right showing, like VS Code's infoview, what
+Lean knows at the cursor:
+
+- **Tactic state**: the goals and hypotheses (`$/lean/plainGoal`).
+- **Expected type** of the term at the cursor (`$/lean/plainTermGoal`).
+
+It asks `lake serve` 75 ms after the last cursor movement or edit, so holding `j` sends one round of requests at the end,
+not one per line. Empty sections are left out. `:lean-goals-toggle` hides or shows the pane.
 
 The pane is an ordinary split showing a file under `/tmp/lean-goals-*/`, which the plugin rewrites and reloads. You can
 move into it with `Space w l` / `Ctrl-w l`, and select and yank text there as in any buffer. It only updates while
@@ -27,6 +31,9 @@ Helix's block cursor sits *on* a character, so at the last character of a tactic
 tactic; move to the next line to see its result.
 
 The shell sets `HELIX_STEEL_CONFIG` so Helix loads `init.scm`/`helix.scm` from `.helix/`, and `STEEL_HOME` to `.steel/`.
+
+The fork pins workspace trust to a hash of `.helix/`. After that directory changes (e.g. after a `git pull`), Helix
+ignores the local config and says so in the status line; run `:workspace-trust` from a Lean buffer to allow it again.
 
 ## Unicode input
 

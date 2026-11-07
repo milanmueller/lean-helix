@@ -1,7 +1,9 @@
-;; Lean goal pane: shows the goals and hypotheses at the cursor in a split on the right.
+;; Lean goal pane: shows the tactic state and expected type at the cursor, like VS Code's
+;; infoview, in a split on the right.
 ;;
-;; Uses Lean's own `$/lean/plainGoal` (tactic mode) and `$/lean/plainTermGoal` (term mode)
-;; requests, so it only needs the plain `lake serve` language server.
+;; Only needs the plain `lake serve` language server:
+;; - `$/lean/plainGoal`: the tactic state,
+;; - `$/lean/plainTermGoal`: the expected type of the term.
 ;;
 ;; The pane is an ordinary Helix split showing a file that this plugin rewrites and reloads,
 ;; so window navigation (`Space w l`, `Ctrl-w h`…), selections and yanking work in it as in any
@@ -19,6 +21,9 @@
 ;; Wait this long after the last cursor movement or edit before asking Lean, so that
 ;; holding `j` doesn't send a request per line.
 (define *debounce-ms* 75)
+;; Show whatever has arrived after this long, even if some request hasn't been answered.
+;; (A failed request never calls back.)
+(define *timeout-ms* 1000)
 ;; Name of the Lean language server in languages.toml.
 (define *server* "lean")
 
@@ -30,11 +35,12 @@
 ;; Document shown in the pane, once it has been opened.
 (define *doc* #f)
 ;; Lines currently written to the pane's file.
-(define *lines* '("Move the cursor into a proof."))
-;; Bumped on every cursor movement / edit. A pending update only fires if it's still the latest,
-;; and a response is only shown if no newer request has been answered already.
+(define *lines* '("-- Move the cursor into a proof."))
+;; Bumped on every cursor movement / edit; responses to older requests are dropped.
 (define *tick* 0)
-(define *shown-tick* 0)
+;; Answers for the current tick so far: section name -> lines, or #f if there's nothing to show.
+(define *answers* (hash))
+(define *sections* '(tactic term))
 
 ;;; The pane
 
@@ -89,62 +95,100 @@
         (when (not (equal? code-view view))
           (editor-set-focus! code-view))))))
 
-(define (refresh-pane!)
-  (when (pane-view)
-    (write-goals-file!)
-    (editor-document-reload *doc*)))
+(define (show! lines)
+  (unless (equal? lines *lines*)
+    (set! *lines* lines)
+    (when (pane-view)
+      (write-goals-file!)
+      (editor-document-reload *doc*))))
+
+;;; Rendering
+;;
+;; Section headings are written as Lean comments.
+
+(define (lines s)
+  (split-many s "\n"))
+
+(define (render)
+  (let* ([section (lambda (key heading)
+                    (let ([body (hash-try-get *answers* key)])
+                      (if body
+                          (append (list heading) body '(""))
+                          '())))]
+         [out (append (section 'tactic "-- Tactic state")
+                      (section 'term "-- Expected type"))])
+    (show! (if (null? out) '("-- Nothing at the cursor") out))))
+
+;; `$/lean/plainGoal`: {goals: [string]}. JSON arrives as hashes keyed by symbols, arrays as lists.
+(define (tactic-lines result)
+  (and (hash? result)
+       (list? (hash-try-get result 'goals))
+       (let ([goals (hash-ref result 'goals)])
+         (if (null? goals)
+             '("No goals")
+             ;; Separate several goals with a blank line.
+             (let loop ([goals goals] [acc '()])
+               (if (null? (cdr goals))
+                   (append acc (lines (car goals)))
+                   (loop (cdr goals) (append acc (lines (car goals)) '("")))))))))
+
+;; `$/lean/plainTermGoal`: {goal: string, range}.
+(define (term-lines result)
+  (and (hash? result)
+       (string? (hash-try-get result 'goal))
+       (lines (hash-ref result 'goal))))
 
 ;;; Requests
 
 (define (lean-buffer?)
   (equal? (editor-document->language (editor->doc-id (editor-focus))) "lean"))
 
-;; The server name if it's attached to the current buffer (it may still be starting).
+;; The server name if it's attached to the focused buffer (it may still be starting).
 (define (active-server)
-  (and (member *server* (map lsp-client-name (get-active-lsp-clients))) *server*))
+  (and (lean-buffer?)
+       (member *server* (map lsp-client-name (get-active-lsp-clients)))
+       *server*))
 
-(define (show! tick lines)
-  (when (>= tick *shown-tick*)
-    (set! *shown-tick* tick)
-    (unless (equal? lines *lines*)
-      (set! *lines* lines)
-      (refresh-pane!))))
+;; Set once the current tick's timeout has passed: from then on, render every late answer.
+(define *timed-out* #f)
 
-;; JSON responses arrive as hashes keyed by symbols, with arrays as lists.
-(define (goal-lines result)
-  (cond
-    [(not (hash? result)) #f]
-    [(hash-contains? result 'goals)
-     (let ([goals (hash-ref result 'goals)])
-       (cond
-         [(not (list? goals)) #f]
-         [(null? goals) '("No goals")]
-         ;; Separate several goals with a blank line.
-         [else (apply append (map (lambda (g) (append (split-many g "\n") '(""))) goals))]))]
-    [(hash-contains? result 'goal) (cons "Expected type:" (split-many (hash-ref result 'goal) "\n"))]
-    [else #f]))
+(define (answer! tick key to-lines result)
+  (when (= tick *tick*)
+    (set! *answers*
+          (hash-insert *answers*
+                       key
+                       (with-handler (lambda (err)
+                                       (list (to-string "lean-goals: couldn't read the answer: " err)))
+                                     (to-lines result))))
+    (when (or *timed-out* (= (hash-length *answers*) (length *sections*)))
+      (render))))
 
-(define (request-goals tick)
-  (let ([server (active-server)]
-        [path (helix.static.cx->current-file)])
-    (when (and server path)
-      (let* ([pos (helix.static.offset->lsp "utf-16" (cursor-position))]
-             [params (hash "textDocument" (hash "uri" (string-append "file://" path))
-                           "position" (hash "line" (list-ref pos 0) "character" (list-ref pos 1)))])
-        (send-lsp-command
-         server
-         "$/lean/plainGoal"
-         params
-         (lambda (result)
-           (let ([lines (goal-lines result)])
-             (if lines
-                 (show! tick lines)
-                 ;; Not inside a tactic block: fall back to the expected type of the term.
-                 (send-lsp-command server
-                                   "$/lean/plainTermGoal"
-                                   params
-                                   (lambda (result)
-                                     (show! tick (or (goal-lines result) '("No goal here")))))))))))))
+;; Send a request only while the focused buffer still talks to Lean; by the time an earlier
+;; response arrives the user may have moved to the pane or another file.
+(define (request tick method params on-result)
+  (when (and (= tick *tick*) (active-server))
+    (send-lsp-command *server* method params on-result)))
+
+(define (request-all tick)
+  (let ([path (helix.static.cx->current-file)])
+    (when (and (active-server) path)
+      (let* ([lsp-pos (helix.static.offset->lsp "utf-16" (cursor-position))]
+             [uri (string-append "file://" path)]
+             [pos (hash "line" (list-ref lsp-pos 0) "character" (list-ref lsp-pos 1))]
+             [params (hash "textDocument" (hash "uri" uri) "position" pos)])
+        (set! *answers* (hash))
+        (set! *timed-out* #f)
+        (request tick "$/lean/plainGoal" params
+                 (lambda (r) (answer! tick 'tactic tactic-lines r)))
+        (request tick "$/lean/plainTermGoal" params
+                 (lambda (r) (answer! tick 'term term-lines r)))
+        (enqueue-thread-local-callback-with-delay
+         *timeout-ms*
+         (lambda ()
+           (when (= tick *tick*)
+             (set! *timed-out* #t)
+             (when (< (hash-length *answers*) (length *sections*))
+               (render)))))))))
 
 (define (schedule-update)
   (when (and *enabled* (lean-buffer?))
@@ -156,7 +200,7 @@
          ;; Only the last movement within the debounce window sends a request.
          (when (and (= tick *tick*) (lean-buffer?))
            (with-handler (lambda (err) (set-error! (to-string "lean-goals: " err)))
-                         (request-goals tick))))))))
+                         (request-all tick))))))))
 
 (define (on-selection-change _view)
   (schedule-update))
