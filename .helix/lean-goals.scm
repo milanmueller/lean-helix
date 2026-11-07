@@ -29,6 +29,8 @@
 (define *timeout-ms* 1000)
 ;; Name of the Lean language server in languages.toml.
 (define *server* "lean")
+;; Language of the pane's buffer, see languages.toml and runtime/queries/lean-goals.
+(define *language* "lean-goals")
 
 ;; The file shown in the pane. One per Helix instance, so several editors don't fight over it.
 (define *tmp-prefix* "/tmp/lean-goals-")
@@ -86,6 +88,7 @@
     (let ([code-view (editor-focus)])
       ;; Opens to the right of the focused view and focuses it.
       (helix.vsplit *path*)
+      (helix.set-language *language*)
       (set! *doc* (editor->doc-id (editor-focus)))
       (editor-set-focus! code-view))))
 
@@ -107,7 +110,7 @@
 
 ;;; Rendering
 ;;
-;; Section headings are written as Lean comments.
+;; Section headings are Lean comments, so the pane's Lean highlighting sets them apart.
 
 (define (lines s)
   (split-many s "\n"))

@@ -16,3 +16,12 @@ case_sensitive = true # \N (ℕ) vs \n
 [[language]]
 name = "lean"
 language-servers = ["lean", "scls"]
+
+# The goal pane's buffer (lean-goals.scm sets it): Lean highlighting, no language servers.
+# Its queries are in .helix/runtime/queries/lean-goals; the dev shell points HELIX_RUNTIME there.
+[[language]]
+name = "lean-goals"
+scope = "source.lean-goals"
+grammar = "lean"
+file-types = []
+language-servers = []

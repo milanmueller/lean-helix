@@ -47,6 +47,8 @@
               # Keep Steel (Helix plugin) config and data in the repo instead of $HOME.
               export HELIX_STEEL_CONFIG="$PWD/.helix"
               export STEEL_HOME="$PWD/.steel"
+              # Extra tree-sitter queries (the goal pane's highlighting); Helix still falls back to its own runtime.
+              export HELIX_RUNTIME="$PWD/.helix/runtime"
               echo "Lean playground: run 'hx Demo/Basic.lean'."
             '';
           };

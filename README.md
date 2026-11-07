@@ -24,6 +24,10 @@ Lean knows at the cursor:
 It asks `lake serve` 75 ms after the last cursor movement or edit, so holding `j` sends one round of requests at the end,
 not one per line. Empty sections are left out. `:lean-goals-toggle` hides or shows the pane.
 
+The pane uses the `lean-goals` language from `.helix/languages.toml`: the Lean grammar with no language server. Its
+queries live in `.helix/runtime/queries/lean-goals/`, and the dev shell points `HELIX_RUNTIME` there. Goals aren't quite
+Lean syntax, so the highlighting is approximate. Section headings are Lean comments, so they show up dimmed.
+
 The pane is an ordinary split showing a file under `/tmp/lean-goals-*/`, which the plugin rewrites and reloads. You can
 move into it with `Space w l` / `Ctrl-w l`, and select and yank text there as in any buffer. It only updates while
 the focused buffer is a Lean file. Helix has no split resizing, so it takes the same width as the other splits. Since it
