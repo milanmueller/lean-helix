@@ -1,69 +1,98 @@
-;; Lean goal pane: shows the goals and hypotheses at the cursor in a pane on the right.
+;; Lean goal pane: shows the goals and hypotheses at the cursor in a split on the right.
 ;;
 ;; Uses Lean's own `$/lean/plainGoal` (tactic mode) and `$/lean/plainTermGoal` (term mode)
 ;; requests, so it only needs the plain `lake serve` language server.
+;;
+;; The pane is an ordinary Helix split showing a file that this plugin rewrites and reloads,
+;; so window navigation (`Space w l`, `Ctrl-w h`…), selections and yanking work in it as in any
+;; other buffer. Reloading (rather than editing the buffer) keeps it unmodified, so `:q` works.
 
+(require-builtin steel/time)
 (require "helix/editor.scm")
 (require "helix/misc.scm")
-(require "helix/components.scm")
+(require (prefix-in helix. "helix/commands.scm"))
 (require (prefix-in helix.static. "helix/static.scm"))
 
 (provide lean-goals-enable!
-         lean-goals-resize
          lean-goals-toggle)
 
-;; Width of the pane in columns, including the separator.
-(define *width* 50)
 ;; Wait this long after the last cursor movement or edit before asking Lean, so that
 ;; holding `j` doesn't send a request per line.
 (define *debounce-ms* 75)
 ;; Name of the Lean language server in languages.toml.
 (define *server* "lean")
 
+;; The file shown in the pane. One per Helix instance, so several editors don't fight over it.
+(define *tmp-prefix* "/tmp/lean-goals-")
+(define *path* (string-append *tmp-prefix* (number->string (current-milliseconds)) "/goals"))
+
 (define *enabled* #f)
-;; Lines currently shown in the pane.
+;; Document shown in the pane, once it has been opened.
+(define *doc* #f)
+;; Lines currently written to the pane's file.
 (define *lines* '("Move the cursor into a proof."))
 ;; Bumped on every cursor movement / edit. A pending update only fires if it's still the latest,
 ;; and a response is only shown if no newer request has been answered already.
 (define *tick* 0)
 (define *shown-tick* 0)
 
-;;; Rendering
+;;; The pane
 
-(define (wrap line width)
-  (if (<= (string-length line) width)
-      (list line)
-      (cons (substring line 0 width) (wrap (substring line width (string-length line)) width))))
+(define (write-goals-file!)
+  (let ([dir (parent-name *path*)])
+    (unless (path-exists? dir)
+      (create-directory! dir)))
+  (when (path-exists? *path*)
+    (delete-file! *path*))
+  (let ([port (open-output-file *path*)])
+    (for-each (lambda (line)
+                (write-string line port)
+                (write-string "\n" port))
+              *lines*)
+    (close-output-port port)))
 
-(define (render _state rect buf)
-  (when *enabled*
-    (let* ([width (min *width* (area-width rect))]
-           [x (- (area-width rect) width)]
-           ;; Leave the command line at the bottom alone.
-           [height (- (area-height rect) 1)]
-           [text-style (theme-scope "ui.text")]
-           [sep-style (theme-scope "ui.window")]
-           [rows (apply append (map (lambda (l) (wrap l (max 1 (- width 2)))) *lines*))])
-      (buffer/clear-with buf (area x 0 width height) (theme-scope "ui.background"))
-      (let loop ([y 0])
-        (when (< y height)
-          (frame-set-string! buf x y "│" sep-style)
-          (loop (+ y 1))))
-      (let loop ([y 0] [rows rows])
-        (when (and (< y height) (not (null? rows)))
-          (frame-set-string! buf (+ x 2) y (car rows) text-style)
-          (loop (+ y 1) (cdr rows)))))))
+;; The view showing the pane, or #f if the user closed it.
+(define (pane-view)
+  (and *doc* (editor-doc-exists? *doc*) (editor-doc-in-view? *doc*)))
 
-(define (pass-through _state _event)
-  event-result/ignore)
+;; Helix reloads the plugin with fresh state (e.g. after trusting the workspace), leaving the
+;; previous instance's pane open. Take that pane over instead of opening a second one.
+(define (adopt-existing-pane!)
+  (let loop ([docs (editor-all-documents)])
+    (unless (null? docs)
+      (let ([path (editor-document->path (car docs))])
+        (if (and path
+                 (starts-with? path *tmp-prefix*)
+                 (editor-doc-in-view? (car docs)))
+            (begin
+              (set! *doc* (car docs))
+              (set! *path* path))
+            (loop (cdr docs)))))))
 
 (define (show-pane!)
-  (set-editor-clip-right! *width*)
-  (push-component! (new-component! "lean-goals" #f render (hash "handle_event" pass-through))))
+  (unless (pane-view)
+    (adopt-existing-pane!))
+  (unless (pane-view)
+    (write-goals-file!)
+    (let ([code-view (editor-focus)])
+      ;; Opens to the right of the focused view and focuses it.
+      (helix.vsplit *path*)
+      (set! *doc* (editor->doc-id (editor-focus)))
+      (editor-set-focus! code-view))))
 
 (define (hide-pane!)
-  (set-editor-clip-right! 0)
-  (pop-last-component-by-name! "lean-goals"))
+  (let ([view (pane-view)])
+    (when view
+      (let ([code-view (editor-focus)])
+        (editor-set-focus! view)
+        (helix.buffer-close!)
+        (when (not (equal? code-view view))
+          (editor-set-focus! code-view))))))
+
+(define (refresh-pane!)
+  (when (pane-view)
+    (write-goals-file!)
+    (editor-document-reload *doc*)))
 
 ;;; Requests
 
@@ -77,7 +106,9 @@
 (define (show! tick lines)
   (when (>= tick *shown-tick*)
     (set! *shown-tick* tick)
-    (set! *lines* lines)))
+    (unless (equal? lines *lines*)
+      (set! *lines* lines)
+      (refresh-pane!))))
 
 ;; JSON responses arrive as hashes keyed by symbols, with arrays as lists.
 (define (goal-lines result)
@@ -115,7 +146,7 @@
                                    (lambda (result)
                                      (show! tick (or (goal-lines result) '("No goal here")))))))))))))
 
-(define (schedule-update . _args)
+(define (schedule-update)
   (when (and *enabled* (lean-buffer?))
     (set! *tick* (+ *tick* 1))
     (let ([tick *tick*])
@@ -127,6 +158,14 @@
            (with-handler (lambda (err) (set-error! (to-string "lean-goals: " err)))
                          (request-goals tick))))))))
 
+(define (on-selection-change _view)
+  (schedule-update))
+
+;; Reloading the pane's own document fires this too; don't answer it with another request.
+(define (on-document-change doc _old-text)
+  (unless (equal? doc *doc*)
+    (schedule-update)))
+
 ;;; Entry points
 
 (define *hooks-registered* #f)
@@ -136,33 +175,20 @@
 (define (lean-goals-enable!)
   (unless *hooks-registered*
     (set! *hooks-registered* #t)
-    (register-hook "selection-did-change" schedule-update)
-    (register-hook "document-changed" schedule-update))
-  (unless *enabled*
-    (set! *enabled* #t)
-    (show-pane!)
-    ;; init.scm runs before any file is opened, when there is no view to look at yet.
-    (enqueue-thread-local-callback schedule-update)))
-
-(define *min-width* 10)
-
-;;@doc
-;; Set the width of the Lean goal pane: `60` sets it, `+10` / `-10` grow or shrink it.
-(define (lean-goals-resize amount)
-  (let* ([n (string->number amount)]
-         [relative? (memv (string-ref amount 0) '(#\+ #\-))])
-    (if (not n)
-        (set-error! (string-append "lean-goals-resize: expected a number like 60, +10 or -10, got " amount))
-        (begin
-          (set! *width* (max *min-width* (if relative? (+ *width* n) n)))
-          (when *enabled*
-            (set-editor-clip-right! *width*))
-          (set-status! (string-append "Goal pane width: " (number->string *width*)))))))
+    (register-hook "selection-did-change" on-selection-change)
+    (register-hook "document-changed" on-document-change))
+  (set! *enabled* #t)
+  ;; init.scm runs before any file is opened, when there is no view to split yet.
+  (enqueue-thread-local-callback
+   (lambda ()
+     (with-handler (lambda (err) (set-error! (to-string "lean-goals: " err)))
+                   (show-pane!))
+     (schedule-update))))
 
 ;;@doc
 ;; Show or hide the Lean goal pane.
 (define (lean-goals-toggle)
-  (if *enabled*
+  (if (and *enabled* (pane-view))
       (begin
         (set! *enabled* #f)
         (hide-pane!))

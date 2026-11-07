@@ -13,10 +13,15 @@ Nix dev shell for working on a small Lean 4 project in Helix, with a pane that s
 ## Goal pane
 
 The dev shell's `hx` is built from the [Steel plugin fork](https://github.com/helix-editor/helix/pull/8675) of Helix; the
-config lives in `.helix/`. `.helix/lean-goals.scm` adds a pane on the right showing the goals and hypotheses at the cursor.
-It asks `lake serve` with Lean's built-in `$/lean/plainGoal` (falling back to `$/lean/plainTermGoal`) 75 ms after the last
-cursor movement or edit, so holding `j` sends one request at the end, not one per line. `:lean-goals-toggle` hides or
-shows it, and `:lean-goals-resize` sets its width (`60`) or grows and shrinks it (`+10`, `-10`); it starts at 50 columns.
+config lives in `.helix/`. `.helix/lean-goals.scm` opens a vertical split on the right showing the goals and hypotheses at
+the cursor. It asks `lake serve` with Lean's built-in `$/lean/plainGoal` (falling back to `$/lean/plainTermGoal`) 75 ms
+after the last cursor movement or edit, so holding `j` sends one request at the end, not one per line.
+`:lean-goals-toggle` hides or shows it.
+
+The pane is an ordinary split showing a file under `/tmp/lean-goals-*/`, which the plugin rewrites and reloads. You can
+move into it with `Space w l` / `Ctrl-w l`, and select and yank text there as in any buffer. It only updates while
+the focused buffer is a Lean file. Helix has no split resizing, so it takes the same width as the other splits. Since it
+is its own window, `:q` in the Lean buffer leaves the pane open; use `:qa` to quit both.
 
 Helix's block cursor sits *on* a character, so at the last character of a tactic line the pane shows the goal before that
 tactic; move to the next line to see its result.
