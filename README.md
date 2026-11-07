@@ -4,8 +4,9 @@ Nix dev shell for working on a small Lean 4 project in Helix, with a pane that s
 
 ## Usage
 
-1. `nix develop` (or `direnv allow`). The first time builds Helix from source (a few minutes).
-2. `hx Demo/Basic.lean`. The first open fetches Lean (slow).
+1. `nix develop` (or `direnv allow`). The first time builds Helix from source (a few minutes) and installs the pinned
+   Lean toolchain.
+2. `hx Demo/Basic.lean`.
 3. Move the cursor into a proof; the pane on the right shows its goals.
 
 `Demo/Basic.lean` ends with an unfinished proof (`or_swap`) to inspect.

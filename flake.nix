@@ -49,6 +49,10 @@
               export STEEL_HOME="$PWD/.steel"
               # Extra tree-sitter queries (the goal pane's highlighting); Helix still falls back to its own runtime.
               export HELIX_RUNTIME="$PWD/.helix/runtime"
+              # Install the pinned toolchain up front: if `lake serve` has to download it,
+              # Helix's LSP initialize times out and kills the server.
+              # (the elan proxy installs the toolchain from ./lean-toolchain on first use)
+              lake --version >/dev/null
               echo "Lean playground: run 'hx Demo/Basic.lean'."
             '';
           };
